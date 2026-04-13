@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ULVA Anomaly Register</title>
+<style>
+:root{--navy:#0A2540;--amber:#E68A2E;--bg:#F4F7FC;--card:#FFFFFF;--line:#DCE5F0;--text:#102A3C;--muted:#5A6E8A;--green:#1F7A4C;--red:#BC2C1E;--blue:#1F6392}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+.header{background:var(--navy);color:#fff;padding:16px 18px;font-weight:700;font-size:20px}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:4px} input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit} textarea{min-height:88px;resize:vertical}
+button{border:none;border-radius:8px;padding:10px 12px;font:inherit;font-weight:700;cursor:pointer} .primary{background:var(--navy);color:#fff}.amber{background:var(--amber);color:var(--navy)}.green{background:var(--green);color:#fff}.ghost{background:#E9EEF7;color:var(--text)}.danger{background:var(--red);color:#fff}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.toolbar .grow{flex:1}.muted{color:var(--muted);font-size:13px}.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}.open{background:#E1F0FA;color:var(--blue)}.closed{background:#DFF0E6;color:var(--green)}.critical{background:#FEF0EE;color:var(--red)}
+.item{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}.item h4{margin:0 0 6px;font-size:16px}.item-meta{font-size:12px;color:var(--muted);margin-bottom:8px}.row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}.photo{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#eef2f8;aspect-ratio:1}.photo img{width:100%;height:100%;object-fit:cover}.photo button{position:absolute;top:4px;right:4px;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.75);color:#fff;font-size:12px}
+.hidden{display:none}.msg{font-size:13px;color:var(--red);margin-top:8px}.ok{color:var(--green)}
+@media (max-width:760px){.grid,.grid3,.photo-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="header">ULVA Anomaly Register</div>
+<div class="wrap">
+  <div class="card">
+    <h3 style="margin-top:0">New Anomaly</h3>
+    <div class="grid3">
+      <div><label for="project">Project</label><input id="project" placeholder="Project"></div>
+      <div><label for="inspector">Inspector</label><input id="inspector" placeholder="Inspector"></div>
+      <div><label for="priority">Priority</label><select id="priority"><option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option></select></div>
+    </div>
+    <div class="grid">
+      <div><label for="title">Title</label><input id="title" placeholder="Title"></div>
+      <div><label for="location">Location / Tag</label><input id="location" placeholder="Location / Tag"></div>
+    </div>
+    <div class="grid">
+      <div><label for="contractor">Contractor</label><input id="contractor" placeholder="Contractor"></div>
+      <div><label for="discipline">Discipline</label><select id="discipline"><option>Insulation</option><option>ULVAShield</option><option>ULVASeal</option></select></div>
+    </div>
+    <div><label for="desc">Description</label><textarea id="desc" placeholder="Description"></textarea></div>
+    <div><label for="immediate">Immediate Action</label><textarea id="immediate" placeholder="Immediate action"></textarea></div>
+    <div>
+      <label for="issuePhotos">Issue Photos</label>
+      <input id="issuePhotos" type="file" accept="image/*" multiple>
+      <div id="issuePreview" class="photo-grid"></div>
+    </div>
+    <div class="row-actions">
+      <button class="primary" id="createBtn" type="button">Create Anomaly</button>
+      <button class="ghost" id="clearBtn" type="button">Clear</button>
+    </div>
+    <div id="formMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h3 style="margin:0">Register</h3>
+      <input id="search" class="grow" placeholder="Search by ref, title, location, contractor">
+      <select id="statusFilter"><option value="All">All</option><option value="Open">Open</option><option value="Closed">Closed</option></select>
+      <button class="ghost" id="backupBtn" type="button">Backup JSON</button>
+      <button class="ghost" id="csvBtn" type="button">CSV</button>
+      <label class="ghost" style="padding:10px 12px;border-radius:8px;cursor:pointer">Restore<input id="restoreInput" type="file" accept="application/json,.json" class="hidden"></label>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const STORAGE_KEY = 'ulva_anomaly_register_v1';
+let records = loadRecords();
+let draftIssuePhotos = [];
+
+const el = {
+  project: document.getElementById('project'), inspector: document.getElementById('inspector'), priority: document.getElementById('priority'),
+  title: document.getElementById('title'), location: document.getElementById('location'), contractor: document.getElementById('contractor'),
+  discipline: document.getElementById('discipline'), desc: document.getElementById('desc'), immediate: document.getElementById('immediate'),
+  issuePhotos: document.getElementById('issuePhotos'), issuePreview: document.getElementById('issuePreview'), createBtn: document.getElementById('createBtn'),
+  clearBtn: document.getElementById('clearBtn'), formMsg: document.getElementById('formMsg'), search: document.getElementById('search'),
+  statusFilter: document.getElementById('statusFilter'), backupBtn: document.getElementById('backupBtn'), csvBtn: document.getElementById('csvBtn'),
+  restoreInput: document.getElementById('restoreInput'), list: document.getElementById('list')
+};
+
+function loadRecords(){
+  try{ const raw = localStorage.getItem(STORAGE_KEY); const parsed = JSON.parse(raw || '[]'); return Array.isArray(parsed) ? parsed : []; }
+  catch(_){ return []; }
+}
+function saveRecords(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
+function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function nextRef(){ const y = new Date().getFullYear(); const max = records.map(r=>String(r.ref||'')).filter(r=>r.startsWith(`ANO-${y}-`)).map(r=>Number(r.split('-').pop())).filter(Number.isFinite).reduce((a,b)=>Math.max(a,b),0); return `ANO-${y}-${String(max+1).padStart(4,'0')}`; }
+function formatDate(){ return new Date().toLocaleDateString('en-GB'); }
+function clearForm(){ el.project.value=''; el.inspector.value=''; el.priority.value='Medium'; el.title.value=''; el.location.value=''; el.contractor.value=''; el.discipline.value='Insulation'; el.desc.value=''; el.immediate.value=''; el.issuePhotos.value=''; draftIssuePhotos=[]; renderIssuePreview(); el.formMsg.textContent=''; }
+function readFiles(fileList){ return Promise.all(Array.from(fileList).map(file => new Promise((resolve,reject)=>{ const fr = new FileReader(); fr.onload=()=>resolve({name:file.name,data:fr.result}); fr.onerror=()=>reject(fr.error); fr.readAsDataURL(file);}))); }
+async function handleIssueFiles(){ draftIssuePhotos = await readFiles(el.issuePhotos.files); renderIssuePreview(); }
+function renderIssuePreview(){ if(!draftIssuePhotos.length){ el.issuePreview.innerHTML=''; return; } el.issuePreview.innerHTML = draftIssuePhotos.map((p,i)=>`<div class="photo"><img src="${p.data}" alt="photo ${i+1}"><button type="button" onclick="removeDraftPhoto(${i})">×</button></div>`).join(''); }
+window.removeDraftPhoto = function(i){ draftIssuePhotos.splice(i,1); renderIssuePreview(); };
+
+async function createRecord(){
+  const title = el.title.value.trim(); const desc = el.desc.value.trim();
+  if(!title || !desc){ el.formMsg.textContent='Title and description are required.'; return; }
+  el.formMsg.textContent='';
+  const rec = {
+    id: Date.now() + Math.floor(Math.random()*1000), ref: nextRef(), project: el.project.value.trim(), inspector: el.inspector.value.trim(),
+    priority: el.priority.value, title, location: el.location.value.trim(), contractor: el.contractor.value.trim(), discipline: el.discipline.value,
+    desc, immediate: el.immediate.value.trim(), status: 'Open', dateRaised: formatDate(), dateClosed: '', closeout: '', issuePhotos: [...draftIssuePhotos], closePhotos: []
+  };
+  records.unshift(rec); saveRecords(); clearForm(); render();
+}
+
+function getFiltered(){ const q = el.search.value.trim().toLowerCase(); const s = el.statusFilter.value; return records.filter(r=>{ const statusOk = s==='All' || r.status===s; const hay = [r.ref,r.title,r.location,r.contractor,r.discipline,r.desc].join(' ').toLowerCase(); return statusOk && (!q || hay.includes(q)); }); }
+function badgeClass(r){ return r.status==='Closed' ? 'closed' : (r.priority==='Critical' ? 'critical' : 'open'); }
+function render(){ const items = getFiltered(); if(!items.length){ el.list.innerHTML = '<div class="muted">No anomalies found.</div>'; return; } el.list.innerHTML = items.map(r=>`<div class="item"><div class="toolbar"><div class="grow"><h4>${esc(r.ref)} - ${esc(r.title)}</h4><div class="item-meta">${esc(r.priority)} | ${esc(r.location||'—')} | ${esc(r.contractor||'—')} | ${esc(r.discipline)} | Raised ${esc(r.dateRaised)}</div></div><span class="pill ${badgeClass(r)}">${esc(r.status)}</span></div><div>${esc(r.desc)}</div>${r.immediate?`<div class="muted" style="margin-top:8px"><strong>Immediate action:</strong> ${esc(r.immediate)}</div>`:''}${r.closeout?`<div class="muted" style="margin-top:8px"><strong>Closeout:</strong> ${esc(r.closeout)} (${esc(r.dateClosed)})</div>`:''}<div class="row-actions"><button class="green" type="button" onclick="closeRecord(${r.id})" ${r.status==='Closed'?'disabled':''}>Close</button><button class="ghost" type="button" onclick="emailRecord(${r.id})">Email</button><button class="ghost" type="button" onclick="reportRecord(${r.id})">Report</button><button class="danger" type="button" onclick="deleteRecord(${r.id})">Delete</button></div></div>`).join(''); }
+
+window.closeRecord = function(id){ const r = records.find(x=>x.id===id); if(!r || r.status==='Closed') return; const text = prompt('Closeout description', r.closeout || ''); if(text===null) return; r.status='Closed'; r.closeout=text.trim(); r.dateClosed=formatDate(); saveRecords(); render(); };
+window.deleteRecord = function(id){ if(!confirm('Delete this anomaly?')) return; records = records.filter(r=>r.id!==id); saveRecords(); render(); };
+window.emailRecord = function(id){ const r = records.find(x=>x.id===id); if(!r) return; const subject = `${r.ref} - ${r.title}`; const body = `ANOMALY REPORT\n\nReference: ${r.ref}\nProject: ${r.project}\nInspector: ${r.inspector}\nPriority: ${r.priority}\nDiscipline: ${r.discipline}\nLocation: ${r.location}\nContractor: ${r.contractor}\nDate Raised: ${r.dateRaised}\n\nDescription:\n${r.desc}\n\nImmediate Action:\n${r.immediate || ''}\n\nStatus: ${r.status}${r.closeout ? `\nCloseout: ${r.closeout}\nDate Closed: ${r.dateClosed}` : ''}`; window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
+window.reportRecord = function(id){ const r = records.find(x=>x.id===id); if(!r) return; const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(r.ref)} Report</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#102A3C}table{border-collapse:collapse;width:100%;margin-top:12px}td{border:1px solid #DCE5F0;padding:8px;vertical-align:top}td:first-child{width:180px;font-weight:700;background:#F4F7FC}button{padding:10px 14px;border:none;border-radius:6px;background:#0A2540;color:#fff;cursor:pointer;margin-bottom:16px}pre{white-space:pre-wrap;font-family:Arial,sans-serif;margin:0}</style></head><body><button onclick="window.print()">Print / Save PDF</button><h1>${esc(r.ref)}</h1><table><tr><td>Title</td><td>${esc(r.title)}</td></tr><tr><td>Project</td><td>${esc(r.project||'—')}</td></tr><tr><td>Inspector</td><td>${esc(r.inspector||'—')}</td></tr><tr><td>Priority</td><td>${esc(r.priority)}</td></tr><tr><td>Discipline</td><td>${esc(r.discipline)}</td></tr><tr><td>Location</td><td>${esc(r.location||'—')}</td></tr><tr><td>Contractor</td><td>${esc(r.contractor||'—')}</td></tr><tr><td>Status</td><td>${esc(r.status)}</td></tr><tr><td>Date Raised</td><td>${esc(r.dateRaised)}</td></tr><tr><td>Description</td><td><pre>${esc(r.desc)}</pre></td></tr><tr><td>Immediate Action</td><td><pre>${esc(r.immediate||'')}</pre></td></tr><tr><td>Closeout</td><td><pre>${esc(r.closeout||'')}</pre></td></tr><tr><td>Date Closed</td><td>${esc(r.dateClosed||'')}</td></tr></table></body></html>`; const blob = new Blob([html], {type:'text/html'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 30000); };
+
+function download(name, blob){ const a = document.createElement('a'); const url = URL.createObjectURL(blob); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1000); }
+function exportCSV(){ let csv = 'Ref,Project,Inspector,Title,Priority,Location,Contractor,Discipline,Status,Date Raised,Date Closed,Description,Immediate Action,Closeout\n'; records.forEach(r=>{ const row = [r.ref,r.project,r.inspector,r.title,r.priority,r.location,r.contractor,r.discipline,r.status,r.dateRaised,r.dateClosed,r.desc,r.immediate,r.closeout].map(v=>`"${String(v ?? '').replace(/"/g,'""')}"`).join(','); csv += row + '\n'; }); download('ulva_anomalies.csv', new Blob([csv], {type:'text/csv;charset=utf-8'})); }
+function exportJSON(){ download('ulva_anomalies_backup.json', new Blob([JSON.stringify(records, null, 2)], {type:'application/json'})); }
+function restoreJSON(e){ const file = e.target.files && e.target.files[0]; if(!file) return; const fr = new FileReader(); fr.onload = ()=>{ try{ const parsed = JSON.parse(fr.result); if(!Array.isArray(parsed)) throw new Error('Invalid'); records = parsed; saveRecords(); render(); } catch(_){ alert('Invalid backup file'); } finally { e.target.value=''; } }; fr.readAsText(file); }
+
+el.issuePhotos.addEventListener('change', handleIssueFiles);
+el.createBtn.addEventListener('click', createRecord);
+el.clearBtn.addEventListener('click', clearForm);
+el.search.addEventListener('input', render);
+el.statusFilter.addEventListener('change', render);
+el.backupBtn.addEventListener('click', exportJSON);
+el.csvBtn.addEventListener('click', exportCSV);
+el.restoreInput.addEventListener('change', restoreJSON);
+
+render();
+</script>
+</body>
+</html>
